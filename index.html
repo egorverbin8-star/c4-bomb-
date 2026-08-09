@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>CS:GO C4 PRO</title>
+    <style>
+        /* ПОЛНЫЙ CSS-СНОС ЛУПЫ И ЗАДЕРЖКИ ДЛЯ ВСЕХ ЭЛЕМЕНТОВ */
+        * {
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body { background-color: #121212; color: white; font-family: Arial, sans-serif; display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        
+        /* ЛЕГКИЕ 3D ПРОВОДА БЕЗ ТЯЖЕЛЫХ ФИЛЬТРОВ */
+        .wire-container { display: flex; gap: 20px; margin-bottom: -15px; width: 260px; justify-content: center; pointer-events: none; }
+        .wire { width: 12px; height: 35px; border-radius: 6px; }
+        .wire.red { background: linear-gradient(to right, #cc0000, #990000); transform: rotate(-5deg); }
+        .wire.blue { background: linear-gradient(to right, #0044cc, #002288); transform: rotate(10deg); height: 40px; }
+        .wire.yellow { background: linear-gradient(to right, #cccc00, #999900); transform: rotate(-8deg); }
+
+        /* ЧИСТЫЙ КОРПУС БОМБЫ БЕЗ ЛИШНИХ СЛОЕВ И НАЛОЖЕНИЙ */
+        .bomb-body { background: #2c251e; padding: 25px; border-radius: 14px; border: 5px solid #3d3429; width: 330px; box-sizing: border-box; }
+
+        /* ЭКРАН С4 */
+        .display-container { background: #050000; border: 4px solid #1a1a1a; border-radius: 8px; padding: 12px; margin-bottom: 20px; text-align: center; }
+        .display { color: #ff1111; font-family: monospace; font-size: 42px; font-weight: bold; text-shadow: 0 0 12px #ff0000; }
+
+        /* КНОПКИ КЛАВИАТУРЫ — ЛЕГКИЙ И СВЕРХОТЗЫВЧИВЫЙ СТИЛЬ */
+        .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 15px; }
+        .grid button { 
+            background: #4a4238; 
+            color: #dfd0bc; 
+            border: 2px solid #111; 
+            padding: 16px; 
+            font-size: 24px; 
+            font-weight: bold; 
+            border-radius: 6px; 
+            cursor: pointer; 
+            touch-action: manipulation; /* Убивает 300мс на Айфоне аппаратно */
+        }
+        .grid button:active { background: #1a1613; }
+        .grid button.clr { background: #990000; color: white; font-size: 16px; }
+        .grid button.ent { background: #006600; color: white; font-size: 16px; }
+        
+        .status { text-align: center; color: #a49684; font-size: 11px; font-weight: bold; min-height: 35px; line-height: 1.4; text-transform: uppercase; }
+    </style>
+</head>
+<body>
+
+<div class="wire-container">
+    <div class="wire red"></div>
+    <div class="wire blue"></div>
+    <div class="wire yellow"></div>
+</div>
+
+<div class="bomb-body">
+    <div class="display-container">
+        <div id="bombDisplay" class="display">-------</div>
+    </div>
+    <div class="grid">
+        <!-- Тот самый первый, моментально срабатывающий onclick -->
+        <button onclick="pressKey('1')">1</button>
+        <button onclick="pressKey('2')">2</button>
+        <button onclick="pressKey('3')">3</button>
+        <button onclick="pressKey('4')">4</button>
+        <button onclick="pressKey('5')">5</button>
+        <button onclick="pressKey('6')">6</button>
+        <button onclick="pressKey('7')">7</button>
+        <button onclick="pressKey('8')">8</button>
+        <button onclick="pressKey('9')">9</button>
+        <button class="clr" onclick="pressClear()">CLR</button>
+        <button onclick="pressKey('0')">0</button>
+        <button class="ent" onmousedown="startDefuse()" onmouseup="stopDefuse()" onmouseleave="stopDefuse()" ontouchstart="startDefuse()" ontouchend="stopDefuse()">ENT</button>
+    </div>
+    <div id="statusLabel" class="status">ОЖИДАНИЕ ВВОДА КОДА</div>
+</div>
+
+<script>
+    let currentInput = "";
+    let bombTimer = null;
+    let defuseTimer = null;
+    let timeLeft = 45;
+    let defuseTimeLeft = 9;
+    let isArmed = false;
+    let isDefusing = false;
+
+    const display = document.getElementById("bombDisplay");
+    const status = document.getElementById("statusLabel");
+
+    // ТОТ САМЫЙ ПЕРВЫЙ РАБОЧИЙ ЗВУКОВОЙ ДВИЖОК
+    function playAudio(file, vol = 0.5) {
+        try {
+            let audio = new Audio(file);
+            audio.volume = vol;
+            audio.play().catch(function() {});
+        } catch(e) {}
+    }
+
+    function pressKey(num) {
+        if (isArmed) return;
+        
+        // Звук вылетает на ПЕРВОЙ строчке, до того как обновится экран!
+        playAudio('beep.mp3', 0.3);
+
+        if (display.innerText === "-------" || display.innerText === "DEFUSED" || display.innerText === "BOOM!" || display.innerText === "ERROR") {
+            currentInput = "";
+            display.innerText = "";
+        }
+        if (currentInput.length < 7) {
+            currentInput += num;
+            display.innerText = currentInput;
+        }
+    }
+
+    function pressClear() {
+        if (isArmed) return;
+        playAudio('beep.mp3', 0.3);
+        currentInput = "";
+        display.innerText = "-------";
+        status.innerText = "ОЖИДАНИЕ ВВОДА КОДА";
+    }
+
+    function startDefuse() {
+        if (!isArmed) {
+            if (currentInput.length === 7) {
+                isArmed = true;
+                timeLeft = 45;
+                status.innerText = "БОМБА АКТИВИРОВАНА";
+                playAudio('plant.mp3', 1.0); 
+                
+                bombTimer = setInterval(function() {
+                    timeLeft--;
+                    if (timeLeft > 0) {
+                        display.innerText = "00:" + String(timeLeft).padStart(2, '0');
+                        if (timeLeft > 4) {
+                            playAudio('beep.mp3', 0.3);
+                        } else {
+                            playAudio('beep.mp3', 0.3);
+                            setTimeout(function() { playAudio('beep.mp3', 0.3); }, 400);
+                        }
+                    } else {
+                        handleExplosion();
+                    }
+                }, 1000);
+            } else {
+                display.innerText = "ERROR";
+                status.innerText = "НУЖЕН 7-ЗНАЧНЫЙ КОД";
+            }
+            return;
+        }
+
+        if (isArmed && !isDefusing) {
+            isDefusing = true;
+            defuseTimeLeft = 9;
+            status.innerText = "РАЗМИНИРОВАНИЕ: 9 СЕК";
+            status.style.color = "#55ff55";
+            playAudio('defuce-ct.mp3', 1.0);
+
+            defuseTimer = setInterval(function() {
+                defuseTimeLeft--;
+                if (defuseTimeLeft > 0) {
+                    status.innerText = "РАЗМИНИРОВАНИЕ: " + defuseTimeLeft + " СЕК";
+                } else {
+                    clearInterval(defuseTimer);
+                    clearInterval(bombTimer);
+                    isArmed = false;
+                    isDefusing = false;
+                    currentInput = "";
+                    display.innerText = "DEFUSED";
+                    status.innerText = "БОМБА ОБЕЗВРЕЖЕНА";
+                    playAudio('defuse.mp3', 1.0); 
+                    
+                    setTimeout(function() { playAudio('ultimate-mvp-csgo.mp3', 0.4); }, 1500);
+                }
+            }, 1000);
+        }
+    }
+
+    function stopDefuse() {
+        if (isArmed && isDefusing) {
+            clearInterval(defuseTimer);
+            isDefusing = false;
+            status.innerText = "СОРВАНО! КНОПКА ОТПУЩЕНА";
+            status.style.color = "#ff5555";
+            setTimeout(function() { if (!isDefusing && isArmed) { status.innerText = "БОМБА АКТИВИРОВАНА"; status.style.color = "#a49684"; } }, 1500);
+        }
+    }
+
+    function handleExplosion() {
+        clearInterval(bombTimer);
+        clearInterval(defuseTimer);
+        isArmed = false;
+        currentInput = "";
+        display.innerText = "BOOM!";
+        status.innerText = "ВЗРЫВ!";
+        status.style.color = "#ff1111";
+        
+        if (isDefusing && defuseTimeLeft === 3) {
+            playAudio('s1mple.mp3', 1.0);
+            setTimeout(function() { playAudio('explode.mp3', 0.5); }, 1500); 
+        } else {
+            playAudio('explode.mp3', 0.5); 
+            playAudio('ez4ence.mp3', 0.3); 
+        }
+        isDefusing = false;
+    }
+</script>
+</body>
+</html>
