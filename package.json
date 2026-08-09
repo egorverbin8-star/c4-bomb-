@@ -1,8 +1,13 @@
 {
   "name": "c4-bomb",
   "version": "1.0.0",
+  "scripts": {
+    "ionic:build": "echo 'No build step needed'",
+    "capacitor:build:before": "npx cap add android || echo 'Already added'"
+  },
   "dependencies": {
     "@capacitor/core": "^6.0.0",
-    "@capacitor/cli": "^6.0.0"
+    "@capacitor/cli": "^6.0.0",
+    "@capacitor/android": "^6.0.0"
   }
 }
